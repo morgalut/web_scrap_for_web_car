@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -43,20 +43,23 @@ class GearSecondHandScraper(BaseScraper):
 
         items: list[tuple[str, str]] = []
 
-        # Strong + simple rule: any link containing the article prefix
-        for a in soup.select("a[href*='כתבת-רכב']"):
-            href = (a.get("href") or "").strip()
-            if not href:
+        for a in soup.select("a[href]"):
+            href_raw = (a.get("href") or "").strip()
+            if not href_raw:
                 continue
 
-            url = self._abs(href)
+            href_decoded = unquote(href_raw)
+
+            # ✅ match after decoding (works for encoded + Hebrew)
+            if "/כתבת-רכב/" not in href_decoded:
+                continue
+
+            url = self._abs(href_raw)
             if not self._is_same_domain(url):
                 continue
 
             text = a.get_text(" ", strip=True)
-            text = " ".join(text.split())
-            if not text:
-                continue
+            text = " ".join(text.split()) if text else ""  # ✅ allow empty text
 
             items.append((url, text))
 
@@ -115,7 +118,8 @@ class GearSecondHandScraper(BaseScraper):
                     items = self._extract_listing_items(html_pw)
                     found_urls = [u for (u, _t) in items]
                     html_for_paging = html_pw
-                except Exception:
+                except Exception as e:
+                    print("Playwright discovery failed:", type(e).__name__, str(e))
                     found_urls = []
 
             for u in found_urls:

@@ -13,7 +13,7 @@ from app.core.scrapers.base import BaseScraper
 from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
 from app.core.scrapers.gear_scraper import GearSecondHandScraper  # ✅ NEW
-
+from app.core.scrapers.icar_news_scraper import IcarNewsScraper  # ✅ NEW
 
 @dataclass
 class ScrapeRuntime:
@@ -124,6 +124,12 @@ class ScraperRegistry:
             concurrency=concurrency,
         )
 
+    def _create_icar_news(self, concurrency: int) -> BaseScraper:
+        # HTTPX is usually enough; if you later find missing content, swap to PlaywrightFetcher
+        return IcarNewsScraper(
+            fetcher=self._httpx,
+            concurrency=concurrency,
+        )
     # -----------------------
     # Public API
     # -----------------------
@@ -136,6 +142,8 @@ class ScraperRegistry:
 
         if key == "gear_second_hand":  # ✅ NEW
             return self._create_gear(concurrency=concurrency)
+        if key == "icar_news":  # ✅ NEW
+            return self._create_icar_news(concurrency=concurrency)
 
         # ✅ NEVER return None
         raise ValueError(f"Unknown scraper key: {key}")
