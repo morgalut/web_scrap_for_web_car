@@ -14,6 +14,7 @@ from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
 from app.core.scrapers.gear_scraper import GearSecondHandScraper
 from app.core.scrapers.icar_news_scraper import IcarNewsScraper
+from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper  # ✅ NEW
 
 
 @dataclass
@@ -98,6 +99,13 @@ class ScraperRegistry:
         """
         return self._httpx
 
+    def _get_wheel_fetcher(self) -> BaseFetcher:
+        return HybridFetcher(
+            http=self._httpx,
+            pw=self._get_pw(),
+            # ✅ works for listing OR article pages
+            require_selector="a.catArtiBox[href], h1.entry-title, div.entry-content",
+        )
     # -----------------------
     # Scraper factories
     # -----------------------
@@ -130,6 +138,12 @@ class ScraperRegistry:
             concurrency=concurrency,
         )
 
+    def _create_wheel_test_drives(self, concurrency: int) -> BaseScraper:
+        return WheelTestDrivesScraper(
+            fetcher=self._get_wheel_fetcher(),
+            concurrency=concurrency,
+        )
+
     # -----------------------
     # Public API
     # -----------------------
@@ -146,5 +160,9 @@ class ScraperRegistry:
 
         if key == "icar_news":
             return self._create_icar_news(concurrency=concurrency)
+
+        # ✅ NEW: Wheel category
+        if key == "wheel_test_drives":
+            return self._create_wheel_test_drives(concurrency=concurrency)
 
         raise ValueError(f"Unknown scraper key: {key}")

@@ -10,7 +10,11 @@ class HttpxConfig:
     retries: int = 3
     backoff_s: float = 0.6
     max_connections: int = 40
-    user_agent: str = "Mozilla/5.0 (compatible; TradeMobileHybridScraper/1.1)"
+    user_agent: str = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36"
+)
 
 
 ScraperKey = Literal[
@@ -20,6 +24,7 @@ ScraperKey = Literal[
     "gear_car_tests",
     "gear_car_insurance",  # ✅ NEW
     "icar_news",
+    "wheel_test_drives",
 ]
 
 
@@ -51,6 +56,10 @@ class Settings:
         SiteConfig(
             key="icar_news",
             start_url="https://www.icar.co.il/%D7%97%D7%93%D7%A9%D7%95%D7%AA_%D7%A8%D7%9B%D7%91/",
+        ),
+        SiteConfig(
+            key="wheel_test_drives",
+            start_url="https://wheel.co.il/category/%D7%9E%D7%91%D7%97%D7%A0%D7%99-%D7%93%D7%A8%D7%9B%D7%99%D7%9D/",
         ),
     )
 

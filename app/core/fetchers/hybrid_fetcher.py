@@ -63,7 +63,27 @@ class HybridFetcher(BaseFetcher):
 
         # 2) Fallback: Playwright
         # ✅ Wait for ProseMirror to be VISIBLE only on pages where it should exist
-        return await self.pw.get_html(url, wait_for_selector=self.require_selector)
+        return await self.pw.get_html(
+                url,
+                wait_for_selector=self.require_selector,
+                wait_state="attached",
+                extra_wait_ms=400,
+                click_selectors=[
+                    # common cookie/consent/close buttons (best-effort, harmless if missing)
+                    "button:has-text('Accept')",
+                    "button:has-text('I agree')",
+                    "button:has-text('OK')",
+                    "button:has-text('Agree')",
+                    "button:has-text('מאשר')",
+                    "button:has-text('אישור')",
+                    "button:has-text('מסכים')",
+                    "button:has-text('הבנתי')",
+                    ".fc-button.fc-cta-consent",  # some cookie frameworks
+                    "button[aria-label='Close']",
+                    ".close",
+                    ".popup-close",
+                ],
+            )
 
     async def aclose(self) -> None:
         await self.http.aclose()
