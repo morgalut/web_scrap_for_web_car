@@ -8,9 +8,11 @@ from app.core.fetchers.base import BaseFetcher
 from app.core.fetchers.httpx_fetcher import HttpxFetcher
 from app.core.fetchers.playwright_fetcher import PlaywrightFetcher
 from app.core.fetchers.hybrid_fetcher import HybridFetcher
+
 from app.core.scrapers.base import BaseScraper
 from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
+from app.core.scrapers.gear_scraper import GearSecondHandScraper  # ✅ NEW
 
 
 @dataclass
@@ -20,7 +22,13 @@ class ScrapeRuntime:
     hybrid_trademobile: Optional[HybridFetcher]
 
     async def aclose(self) -> None:
-        # close hybrid if created, else close httpx/pw individually
+        """
+        Close resources safely.
+
+        NOTE:
+        - HybridFetcher closes both http and pw internally.
+        - If hybrid exists, close it and return (prevents double-close).
+        """
         if self.hybrid_trademobile is not None:
             await self.hybrid_trademobile.aclose()
             return
@@ -36,8 +44,13 @@ class ScraperRegistry:
         self.settings = settings
         self.headless = headless
 
+        # Always available
         self._httpx = HttpxFetcher(config=settings.httpx)
+
+        # Lazy-created (only if needed)
         self._pw: Optional[PlaywrightFetcher] = None
+
+        # Lazy-created hybrid (TradeMobile articles)
         self._hybrid_trademobile: Optional[HybridFetcher] = None
 
     def runtime(self) -> ScrapeRuntime:
@@ -52,8 +65,15 @@ class ScraperRegistry:
             self._pw = PlaywrightFetcher(headless=self.headless)
         return self._pw
 
+    # -----------------------
+    # Fetcher factories
+    # -----------------------
     def _get_trademobile_article_fetcher(self) -> BaseFetcher:
-        # Hybrid for article pages (wait for ProseMirror when needed)
+        """
+        TradeMobile:
+        - Article pages sometimes need Playwright to wait for div.ProseMirror.
+        - Discovery should stay HTTPX (fast, no ProseMirror requirement).
+        """
         if self._hybrid_trademobile is None:
             self._hybrid_trademobile = HybridFetcher(
                 http=self._httpx,
@@ -63,23 +83,59 @@ class ScraperRegistry:
         return self._hybrid_trademobile
 
     def _get_autocoil_fetcher(self) -> BaseFetcher:
+        """
+        Auto.co.il:
+        - HTTPX is enough (fast).
+        """
         return self._httpx
 
+    def _get_gear_fetcher(self) -> BaseFetcher:
+        """
+        Gear:
+        - We will use HTTPX for discovery (inside Gear scraper),
+          and Playwright as fallback for article pages when needed.
+        - So here we mainly ensure Playwright is available.
+        """
+        return self._httpx
+
+    # -----------------------
+    # Scraper factories
+    # -----------------------
+    def _create_trademobile(self, concurrency: int) -> BaseScraper:
+        article_fetcher = self._get_trademobile_article_fetcher()
+        discovery_fetcher = self._httpx
+        return TradeMobileScraper(
+            fetcher=article_fetcher,
+            discovery_fetcher=discovery_fetcher,
+            concurrency=concurrency,
+        )
+
+    def _create_autocoil(self, concurrency: int) -> BaseScraper:
+        return AutoCoIlTestDrivesScraper(
+            fetcher=self._get_autocoil_fetcher(),
+            concurrency=concurrency,
+        )
+
+    def _create_gear(self, concurrency: int) -> BaseScraper:
+        # Gear scraper needs both http + pw fallback
+        return GearSecondHandScraper(
+            http=self._httpx,
+            pw=self._get_pw(),
+            concurrency=concurrency,
+        )
+
+    # -----------------------
+    # Public API
+    # -----------------------
     def create(self, key: ScraperKey, concurrency: int) -> BaseScraper:
         if key == "trademobile_posts":
-            article_fetcher = self._get_trademobile_article_fetcher()
-            discovery_fetcher = self._httpx  # ✅ discovery should not require ProseMirror
-            return TradeMobileScraper(
-                fetcher=article_fetcher,
-                discovery_fetcher=discovery_fetcher,
-                concurrency=concurrency,
-            )
+            return self._create_trademobile(concurrency=concurrency)
 
         if key == "autocoil_test_drives":
-            return AutoCoIlTestDrivesScraper(
-                fetcher=self._get_autocoil_fetcher(),
-                concurrency=concurrency,
-            )
+            return self._create_autocoil(concurrency=concurrency)
+
+        if key == "gear_second_hand":  # ✅ NEW
+            return self._create_gear(concurrency=concurrency)
 
         # ✅ NEVER return None
         raise ValueError(f"Unknown scraper key: {key}")

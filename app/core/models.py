@@ -9,3 +9,5 @@ class Article:
     title: str
     content: str
     published: Optional[str] = None
+
+    raw_html: Optional[str] =None

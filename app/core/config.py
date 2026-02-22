@@ -13,8 +13,11 @@ class HttpxConfig:
     user_agent: str = "Mozilla/5.0 (compatible; TradeMobileHybridScraper/1.1)"
 
 
-ScraperKey = Literal["trademobile_posts", "autocoil_test_drives"]
-
+ScraperKey = Literal[
+    "trademobile_posts",
+    "autocoil_test_drives",
+    "gear_second_hand", 
+]
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -22,15 +25,15 @@ class SiteConfig:
     start_url: str
 
 
+
 @dataclass(frozen=True)
 class Settings:
-    # Keep old behavior as default single-site (backwards compatible)
     base_url: str = "https://trademobile.co.il/posts/"
 
-    # Multi-site registry (new)
     sites: Tuple[SiteConfig, ...] = (
         SiteConfig(key="trademobile_posts", start_url="https://trademobile.co.il/posts/"),
         SiteConfig(key="autocoil_test_drives", start_url="https://www.auto.co.il/articles/test-drives/"),
+        SiteConfig(key="gear_second_hand", start_url="https://www.gear.co.il/%D7%A8%D7%9B%D7%91-%D7%99%D7%93-%D7%A9%D7%A0%D7%99%D7%94"),  # ✅ NEW
     )
 
     httpx: HttpxConfig = field(default_factory=HttpxConfig)

@@ -101,6 +101,7 @@ class TradeMobileScraper(BaseScraper):
             title=self._clean_text(title),
             content=self._clean_text(content),
             published=published,
+            raw_html=html,  # ✅ NEW
         )
 
     async def fetch_many(self, urls):

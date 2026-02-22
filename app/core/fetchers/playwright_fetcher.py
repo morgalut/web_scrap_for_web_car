@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
@@ -42,7 +42,12 @@ class PlaywrightFetcher(BaseFetcher):
         self._ctx.set_default_navigation_timeout(self.timeout_ms)
         self._ctx.set_default_timeout(self.timeout_ms)
 
-    async def get_html(self, url: str, wait_for_selector: Optional[str] = None) -> str:
+    async def get_html(
+        self,
+        url: str,
+        wait_for_selector: Optional[str] = None,
+        click_selectors: Optional[Sequence[str]] = None,  # ✅ NEW
+    ) -> str:
         await self._ensure()
         assert self._ctx is not None
 
@@ -50,7 +55,16 @@ class PlaywrightFetcher(BaseFetcher):
         try:
             await page.goto(url, wait_until=self.wait_until, timeout=self.timeout_ms)
 
-            # ✅ Explicit “locator(...).wait_for(state='visible')”
+            # ✅ Try to dismiss overlays/popups (best-effort)
+            if click_selectors:
+                for sel in click_selectors:
+                    try:
+                        loc = page.locator(sel).first
+                        if await loc.count():
+                            await loc.click(timeout=2_000)
+                    except Exception:
+                        pass
+
             if wait_for_selector:
                 await page.locator(wait_for_selector).first.wait_for(
                     state="visible",
