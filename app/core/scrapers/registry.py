@@ -14,7 +14,8 @@ from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
 from app.core.scrapers.gear_scraper import GearSecondHandScraper
 from app.core.scrapers.icar_news_scraper import IcarNewsScraper
-from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper  # ✅ NEW
+from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper
+from app.core.scrapers.queenoftheroad_scraper import QueenOfTheRoadTestDrivesScraper
 
 
 @dataclass
@@ -22,19 +23,21 @@ class ScrapeRuntime:
     httpx: HttpxFetcher
     playwright: Optional[PlaywrightFetcher]
     hybrid_trademobile: Optional[HybridFetcher]
+    hybrid_wheel: Optional[HybridFetcher]
+    hybrid_queenoftheroad: Optional[HybridFetcher]
 
     async def aclose(self) -> None:
-        """
-        Close resources safely.
-
-        NOTE:
-        - HybridFetcher closes both http and pw internally.
-        - If hybrid exists, close it and return (prevents double-close).
-        """
+        # Close hybrids first (they own both http+pw)
         if self.hybrid_trademobile is not None:
             await self.hybrid_trademobile.aclose()
-            return
 
+        if self.hybrid_wheel is not None:
+            await self.hybrid_wheel.aclose()
+
+        if self.hybrid_queenoftheroad is not None:
+            await self.hybrid_queenoftheroad.aclose()
+
+        # Safe fallback close
         if self.httpx is not None:
             await self.httpx.aclose()
         if self.playwright is not None:
@@ -52,14 +55,18 @@ class ScraperRegistry:
         # Lazy-created (only if needed)
         self._pw: Optional[PlaywrightFetcher] = None
 
-        # Lazy-created hybrid (TradeMobile articles)
+        # Cached hybrids
         self._hybrid_trademobile: Optional[HybridFetcher] = None
+        self._hybrid_wheel: Optional[HybridFetcher] = None
+        self._hybrid_queenoftheroad: Optional[HybridFetcher] = None
 
     def runtime(self) -> ScrapeRuntime:
         return ScrapeRuntime(
             httpx=self._httpx,
             playwright=self._pw,
             hybrid_trademobile=self._hybrid_trademobile,
+            hybrid_wheel=self._hybrid_wheel,
+            hybrid_queenoftheroad=self._hybrid_queenoftheroad,
         )
 
     def _get_pw(self) -> PlaywrightFetcher:
@@ -71,11 +78,6 @@ class ScraperRegistry:
     # Fetcher factories
     # -----------------------
     def _get_trademobile_article_fetcher(self) -> BaseFetcher:
-        """
-        TradeMobile:
-        - Article pages sometimes need Playwright to wait for div.ProseMirror.
-        - Discovery should stay HTTPX (fast, no ProseMirror requirement).
-        """
         if self._hybrid_trademobile is None:
             self._hybrid_trademobile = HybridFetcher(
                 http=self._httpx,
@@ -85,36 +87,42 @@ class ScraperRegistry:
         return self._hybrid_trademobile
 
     def _get_autocoil_fetcher(self) -> BaseFetcher:
-        """
-        Auto.co.il:
-        - HTTPX is enough (fast).
-        """
         return self._httpx
 
     def _get_gear_fetcher(self) -> BaseFetcher:
-        """
-        Gear:
-        - Discovery and most pages: HTTPX
-        - Fallback: Playwright available for ads/popups or missing content
-        """
         return self._httpx
 
     def _get_wheel_fetcher(self) -> BaseFetcher:
-        return HybridFetcher(
-            http=self._httpx,
-            pw=self._get_pw(),
-            # ✅ works for listing OR article pages
-            require_selector="a.catArtiBox[href], h1.entry-title, div.entry-content",
-        )
+        if self._hybrid_wheel is None:
+            self._hybrid_wheel = HybridFetcher(
+                http=self._httpx,
+                pw=self._get_pw(),
+                require_selector="a.catArtiBox[href], h1.entry-title, div.entry-content",
+            )
+        return self._hybrid_wheel
+
+    # ✅ QueenOfTheRoad HybridFetcher (no click_selectors here)
+    def _get_queenoftheroad_fetcher(self) -> BaseFetcher:
+        if self._hybrid_queenoftheroad is None:
+            self._hybrid_queenoftheroad = HybridFetcher(
+                http=self._httpx,
+                pw=self._get_pw(),
+                require_selector=(
+                    "div.elementor-post__card a.elementor-post__thumbnail__link[href], "
+                    "h1.elementor-heading-title, article p"
+                ),
+                # ✅ DO NOT pass click_selectors
+                # HybridFetcher will use its own default close-ads selectors.
+            )
+        return self._hybrid_queenoftheroad
+
     # -----------------------
     # Scraper factories
     # -----------------------
     def _create_trademobile(self, concurrency: int) -> BaseScraper:
-        article_fetcher = self._get_trademobile_article_fetcher()
-        discovery_fetcher = self._httpx
         return TradeMobileScraper(
-            fetcher=article_fetcher,
-            discovery_fetcher=discovery_fetcher,
+            fetcher=self._get_trademobile_article_fetcher(),
+            discovery_fetcher=self._httpx,
             concurrency=concurrency,
         )
 
@@ -125,7 +133,6 @@ class ScraperRegistry:
         )
 
     def _create_gear(self, concurrency: int) -> BaseScraper:
-        # Gear scraper needs both http + pw fallback
         return GearSecondHandScraper(
             http=self._httpx,
             pw=self._get_pw(),
@@ -144,6 +151,12 @@ class ScraperRegistry:
             concurrency=concurrency,
         )
 
+    def _create_queenoftheroad_test_drives(self, concurrency: int) -> BaseScraper:
+        return QueenOfTheRoadTestDrivesScraper(
+            fetcher=self._get_queenoftheroad_fetcher(),
+            concurrency=concurrency,
+        )
+
     # -----------------------
     # Public API
     # -----------------------
@@ -154,15 +167,16 @@ class ScraperRegistry:
         if key == "autocoil_test_drives":
             return self._create_autocoil(concurrency=concurrency)
 
-        # ✅ Support all Gear categories with the same scraper implementation
         if key in ("gear_second_hand", "gear_car_tests", "gear_car_insurance"):
             return self._create_gear(concurrency=concurrency)
 
         if key == "icar_news":
             return self._create_icar_news(concurrency=concurrency)
 
-        # ✅ NEW: Wheel category
         if key == "wheel_test_drives":
             return self._create_wheel_test_drives(concurrency=concurrency)
+
+        if key == "queenoftheroad_test_drives":
+            return self._create_queenoftheroad_test_drives(concurrency=concurrency)
 
         raise ValueError(f"Unknown scraper key: {key}")

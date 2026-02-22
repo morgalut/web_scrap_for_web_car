@@ -47,13 +47,6 @@ def _clean_text(s: str) -> str:
 
 
 def _parse_wheel_date(date_str: str) -> Optional[datetime]:
-    """
-    Examples:
-      "16 בפבר, 2026"
-      "16 בפבר 2026"
-      "16 בפברואר 2026"
-      "16 בינו, 2026"
-    """
     raw = _clean_text(date_str)
     if not raw:
         return None
@@ -63,13 +56,11 @@ def _parse_wheel_date(date_str: str) -> Optional[datetime]:
     if len(parts) < 3:
         return None
 
-    # day
     try:
         day = int(parts[0])
     except Exception:
         return None
 
-    # month token might have leading "ב"
     month_tok = parts[1]
     if month_tok.startswith("ב") and len(month_tok) > 1:
         month_tok = month_tok[1:]
@@ -78,7 +69,6 @@ def _parse_wheel_date(date_str: str) -> Optional[datetime]:
     if not month:
         return None
 
-    # year
     try:
         year = int(parts[2])
     except Exception:
@@ -92,40 +82,19 @@ def _parse_wheel_date(date_str: str) -> Optional[datetime]:
 
 @dataclass
 class WheelTestDrivesScraper(BaseScraper):
-    """
-    Wheel.co.il category scraper.
-
-    Discovery:
-    - Primary: <a class="catArtiBox" href="ARTICLE_URL"><article .../></a>
-    - Pagination: a.next.page-numbers
-
-    Fetch:
-    - title: h1.entry-title (fallback og:title)
-    - published: span.xb-date parsed to ISO YYYY-MM-DD (fallback meta article:published_time)
-    - content: div.entry-content text
-    - raw_html: full page HTML
-    """
     fetcher: BaseFetcher
     concurrency: int = 10
 
-    # Optional runtime knobs (router sets these)
     request_delay_s: float = 0.0
     request_delay_jitter_s: float = 0.15
     close_ads: bool = False
 
-    # Safety bounds
     max_pages: int = 6
 
     # ----------------------------
     # Internal: HTML acquisition with PW fallback
     # ----------------------------
     async def _get_listing_html(self, url: str) -> str:
-        """
-        Wheel category pages sometimes need JS.
-        Strategy:
-        1) Try self.fetcher.get_html(url) (HTTPX or Hybrid)
-        2) If no cards found AND Playwright is available, force PW and wait for cards.
-        """
         html = await self.fetcher.get_html(url)
         soup = BeautifulSoup(html, "lxml")
 
@@ -144,6 +113,62 @@ class WheelTestDrivesScraper(BaseScraper):
         return html
 
     # ----------------------------
+    # Pagination: page transition function ✅ NEW
+    # ----------------------------
+    def _next_page_url(self, soup: BeautifulSoup, current_url: str) -> Optional[str]:
+        """
+        Returns next page URL using:
+        1) a.next.page-numbers[href] (WordPress "next" button)
+        2) numeric links a.page-numbers[href] where text is a number (e.g. "2", "3")
+           We choose the smallest numeric page that is > current numeric page.
+        """
+        # 1) Preferred: explicit "next"
+        nxt = soup.select_one("a.next.page-numbers[href]")
+        if nxt and nxt.get("href"):
+            return urljoin(current_url, nxt["href"].strip())
+
+        # 2) Fallback: numeric pagination links
+        # Determine current page number:
+        # - WP often marks current page as: <span class="page-numbers current">1</span>
+        # - or can be inferred from URL containing "/page/<n>/"
+        current_num = 1
+
+        cur_span = soup.select_one("span.page-numbers.current")
+        if cur_span:
+            try:
+                current_num = int(_clean_text(cur_span.get_text()))
+            except Exception:
+                current_num = 1
+        else:
+            # parse from URL if it contains /page/<n>/
+            parts = current_url.rstrip("/").split("/")
+            if "page" in parts:
+                try:
+                    i = parts.index("page")
+                    current_num = int(parts[i + 1])
+                except Exception:
+                    current_num = 1
+
+        # Collect numeric page links
+        candidates: list[tuple[int, str]] = []
+        for a in soup.select("a.page-numbers[href]"):
+            txt = _clean_text(a.get_text())
+            if not txt.isdigit():
+                continue
+            n = int(txt)
+            href = a.get("href")
+            if href:
+                candidates.append((n, urljoin(current_url, href.strip())))
+
+        # Choose next numeric page
+        next_candidates = [c for c in candidates if c[0] > current_num]
+        if not next_candidates:
+            return None
+
+        next_candidates.sort(key=lambda x: x[0])
+        return next_candidates[0][1]
+
+    # ----------------------------
     # Discovery
     # ----------------------------
     async def discover_article_urls(self, start_url: str, limit: Optional[int] = None) -> list[str]:
@@ -159,7 +184,7 @@ class WheelTestDrivesScraper(BaseScraper):
             html = await self._get_listing_html(next_url)
             soup = BeautifulSoup(html, "lxml")
 
-            # ✅ Primary: wrapper links
+            # Primary: wrapper links
             cards = soup.select("a.catArtiBox[href]")
             for a in cards:
                 href = a.get("href")
@@ -172,7 +197,7 @@ class WheelTestDrivesScraper(BaseScraper):
                 if limit and len(urls) >= limit:
                     return urls[:limit]
 
-            # ✅ Fallback: try any link inside article cards
+            # Fallback: try any link inside article cards
             if not cards:
                 for art in soup.select("article[id^='post-']"):
                     a2 = art.select_one("a[href]")
@@ -185,9 +210,8 @@ class WheelTestDrivesScraper(BaseScraper):
                     if limit and len(urls) >= limit:
                         return urls[:limit]
 
-            # Pagination
-            nxt = soup.select_one("a.next.page-numbers[href]")
-            next_url = urljoin(next_url, nxt["href"].strip()) if nxt else None
+            # ✅ Use the new page transition function
+            next_url = self._next_page_url(soup, next_url)
 
         return urls[:limit] if limit else urls
 
@@ -224,13 +248,12 @@ class WheelTestDrivesScraper(BaseScraper):
 
         published_str: Optional[str] = None
         if published_at is not None:
-            published_str = published_at.date().isoformat()  # "YYYY-MM-DD"
+            published_str = published_at.date().isoformat()
 
         # Content
         content_text = ""
         content_el = soup.select_one("div.entry-content")
         if content_el:
-            # remove read-more block (if present)
             for rm in content_el.select("div.bMore"):
                 rm.decompose()
             content_text = _clean_text(content_el.get_text(" ", strip=True))

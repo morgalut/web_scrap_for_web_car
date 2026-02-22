@@ -11,25 +11,19 @@ from .playwright_fetcher import PlaywrightFetcher
 
 
 class HybridFetcher(BaseFetcher):
-    """
-    Fast path: HTTPX
-    Fallback: Playwright
-
-    Important fix:
-    - Only enforce require_selector (e.g., div.ProseMirror) on *article* pages.
-    - Do NOT enforce it on the TradeMobile listing page (/posts/), otherwise Playwright will time out.
-    """
-
     def __init__(
         self,
         http: HttpxFetcher,
         pw: PlaywrightFetcher,
         require_selector: Optional[str] = "div.ProseMirror",
+        click_selectors: Optional[list[str]] = None,  # ✅ NEW
     ) -> None:
         self.http = http
         self.pw = pw
         self.require_selector = require_selector
+        self.click_selectors = click_selectors  # ✅ NEW
 
+        
     @staticmethod
     def _is_trademobile_posts_listing(url: str) -> bool:
         """

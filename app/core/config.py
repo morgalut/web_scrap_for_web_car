@@ -22,11 +22,11 @@ ScraperKey = Literal[
     "autocoil_test_drives",
     "gear_second_hand",
     "gear_car_tests",
-    "gear_car_insurance",  # ✅ NEW
+    "gear_car_insurance",
     "icar_news",
     "wheel_test_drives",
+    "queenoftheroad_test_drives",  # ✅ NEW
 ]
-
 
 @dataclass(frozen=True)
 class SiteConfig:
@@ -60,6 +60,10 @@ class Settings:
         SiteConfig(
             key="wheel_test_drives",
             start_url="https://wheel.co.il/category/%D7%9E%D7%91%D7%97%D7%A0%D7%99-%D7%93%D7%A8%D7%9B%D7%99%D7%9D/",
+        ),
+        SiteConfig(
+            key="queenoftheroad_test_drives",
+            start_url="https://www.queenoftheroad.co.il/category/%d7%9e%d7%91%d7%97%d7%a0%d7%99-%d7%93%d7%a8%d7%9b%d7%99%d7%9d/",
         ),
     )
 
