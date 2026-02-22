@@ -12,8 +12,9 @@ from app.core.fetchers.hybrid_fetcher import HybridFetcher
 from app.core.scrapers.base import BaseScraper
 from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
-from app.core.scrapers.gear_scraper import GearSecondHandScraper  # ✅ NEW
-from app.core.scrapers.icar_news_scraper import IcarNewsScraper  # ✅ NEW
+from app.core.scrapers.gear_scraper import GearSecondHandScraper
+from app.core.scrapers.icar_news_scraper import IcarNewsScraper
+
 
 @dataclass
 class ScrapeRuntime:
@@ -92,9 +93,8 @@ class ScraperRegistry:
     def _get_gear_fetcher(self) -> BaseFetcher:
         """
         Gear:
-        - We will use HTTPX for discovery (inside Gear scraper),
-          and Playwright as fallback for article pages when needed.
-        - So here we mainly ensure Playwright is available.
+        - Discovery and most pages: HTTPX
+        - Fallback: Playwright available for ads/popups or missing content
         """
         return self._httpx
 
@@ -125,11 +125,11 @@ class ScraperRegistry:
         )
 
     def _create_icar_news(self, concurrency: int) -> BaseScraper:
-        # HTTPX is usually enough; if you later find missing content, swap to PlaywrightFetcher
         return IcarNewsScraper(
             fetcher=self._httpx,
             concurrency=concurrency,
         )
+
     # -----------------------
     # Public API
     # -----------------------
@@ -140,10 +140,11 @@ class ScraperRegistry:
         if key == "autocoil_test_drives":
             return self._create_autocoil(concurrency=concurrency)
 
-        if key == "gear_second_hand":  # ✅ NEW
+        # ✅ Support all Gear categories with the same scraper implementation
+        if key in ("gear_second_hand", "gear_car_tests", "gear_car_insurance"):
             return self._create_gear(concurrency=concurrency)
-        if key == "icar_news":  # ✅ NEW
+
+        if key == "icar_news":
             return self._create_icar_news(concurrency=concurrency)
 
-        # ✅ NEVER return None
         raise ValueError(f"Unknown scraper key: {key}")

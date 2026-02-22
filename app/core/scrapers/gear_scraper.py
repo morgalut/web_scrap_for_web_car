@@ -13,8 +13,23 @@ from app.core.scrapers.base import BaseScraper
 
 class GearSecondHandScraper(BaseScraper):
     BASE = "https://www.gear.co.il"
+
+    # Article page content selector
     ARTICLE_SELECTOR = "div.single-article_content"
+
+    # Listing/card selector (for Playwright discovery waiting)
+    LISTING_WAIT_SELECTOR = "div.card__content a[href]"
+
+    # Ad/overlay dismissal selectors (best-effort)
     DISMISS_SELECTORS = ["#dismiss-button", "[aria-label='סגור את המודעה']"]
+
+    # ✅ Article path markers to accept (easy to extend)
+    ARTICLE_PATH_MARKERS = (
+        "/כתבת-רכב/",
+        # Add more here if Gear introduces different patterns:
+        # "/מבחן-רכב/",
+        # "/חדשות-רכב/",
+    )
 
     def __init__(
         self,
@@ -38,9 +53,11 @@ class GearSecondHandScraper(BaseScraper):
         # controlled from router: scraper.close_ads = True/False
         return self.DISMISS_SELECTORS if bool(getattr(self, "close_ads", True)) else None
 
+    def _is_article_href(self, href_decoded: str) -> bool:
+        return any(marker in href_decoded for marker in self.ARTICLE_PATH_MARKERS)
+
     def _extract_listing_items(self, html: str) -> list[tuple[str, str]]:
         soup = BeautifulSoup(html, "lxml")
-
         items: list[tuple[str, str]] = []
 
         for a in soup.select("a[href]"):
@@ -51,7 +68,7 @@ class GearSecondHandScraper(BaseScraper):
             href_decoded = unquote(href_raw)
 
             # ✅ match after decoding (works for encoded + Hebrew)
-            if "/כתבת-רכב/" not in href_decoded:
+            if not self._is_article_href(href_decoded):
                 continue
 
             url = self._abs(href_raw)
@@ -59,8 +76,7 @@ class GearSecondHandScraper(BaseScraper):
                 continue
 
             text = a.get_text(" ", strip=True)
-            text = " ".join(text.split()) if text else ""  # ✅ allow empty text
-
+            text = " ".join(text.split()) if text else ""  # allow empty text
             items.append((url, text))
 
         # De-dupe preserving order
@@ -79,16 +95,24 @@ class GearSecondHandScraper(BaseScraper):
     def _find_next_page(self, html: str) -> Optional[str]:
         soup = BeautifulSoup(html, "lxml")
 
+        # Common rel=next
         a = soup.select_one("a[rel='next'][href]")
         if a and a.get("href"):
             return self._abs(a["href"])
 
-        for cand in soup.select("a[href]"):
+        # Common pagination "next" buttons
+        candidates = soup.select("a[href], button")
+        for cand in candidates:
             txt = (cand.get_text(strip=True) or "")
             if txt in {"הבא", "הבאה", "»", ">"}:
                 href = cand.get("href") or ""
                 if href:
                     return self._abs(href)
+
+        # Sometimes a "next" class exists
+        a2 = soup.select_one("a.next[href], li.next a[href]")
+        if a2 and a2.get("href"):
+            return self._abs(a2["href"])
 
         return None
 
@@ -102,17 +126,19 @@ class GearSecondHandScraper(BaseScraper):
                 break
             seen_pages.add(page_url)
 
-            # ✅ HTTPX cannot click ads
+            # 1) Try HTTPX (fast). Works when the listing is server-rendered.
             html_http = await self.http.get_html(page_url)
             items = self._extract_listing_items(html_http)
             found_urls = [u for (u, _t) in items]
             html_for_paging = html_http
 
-            # ✅ Fallback to Playwright ONLY when HTTPX finds nothing
+            # 2) Fallback to Playwright ONLY when HTTPX finds nothing.
+            #    ✅ FIX: wait for listing cards/links to render (many Gear category pages are JS-rendered).
             if not found_urls:
                 try:
                     html_pw = await self.pw.get_html(
                         page_url,
+                        wait_for_selector=self.LISTING_WAIT_SELECTOR,
                         click_selectors=self._click_selectors(),
                     )
                     items = self._extract_listing_items(html_pw)
