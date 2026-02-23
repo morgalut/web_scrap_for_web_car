@@ -28,7 +28,8 @@ ScraperKey = Literal[
     "queenoftheroad_test_drives",
     "carwiz_magazine",
     "freesbe_blog",
-    "autocenter_articles",  # ✅ NEW
+    "autocenter_articles",
+    "israelhayom_auto",   # ✅ NEW
 ]
 
 @dataclass(frozen=True)
@@ -79,7 +80,11 @@ class Settings:
         SiteConfig(
             key="autocenter_articles",
             start_url="https://www.autocenter.co.il/articles",
-    ),
+        ),
+        SiteConfig(
+            key="israelhayom_auto",
+            start_url="https://www.israelhayom.co.il/auto",
+        ),
     )
 
     httpx: HttpxConfig = field(default_factory=HttpxConfig)

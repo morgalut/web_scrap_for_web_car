@@ -18,6 +18,7 @@ from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper
 from app.core.scrapers.queenoftheroad_scraper import QueenOfTheRoadTestDrivesScraper
 from app.core.scrapers.carwiz_magazine_scraper import CarwizMagazineScraper
 from app.core.scrapers.freesbe_blog_scraper import FreesbeBlogScraper
+from app.core.scrapers.israelhayom_auto_scraper import IsraelHayomAutoScraper
 
 
 @dataclass
@@ -177,6 +178,13 @@ class ScraperRegistry:
             pw=self._get_pw(),
             concurrency=concurrency,
         )
+    
+    def _create_israelhayom_auto(self, concurrency: int) -> BaseScraper:
+    # Page is server-rendered (works with httpx right now)
+        return IsraelHayomAutoScraper(
+            fetcher=self._httpx,
+            concurrency=concurrency,
+    )
 
     # -----------------------
     # Public API
@@ -209,6 +217,9 @@ class ScraperRegistry:
         
         if key == "autocenter_articles":
             return self._create_autocenter_articles(concurrency=concurrency)
+        
+        if key == "israelhayom_auto":
+            return self._create_israelhayom_auto(concurrency=concurrency)
 
 
         raise ValueError(f"Unknown scraper key: {key}")
