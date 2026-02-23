@@ -17,6 +17,8 @@ from app.core.scrapers.icar_news_scraper import IcarNewsScraper
 from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper
 from app.core.scrapers.queenoftheroad_scraper import QueenOfTheRoadTestDrivesScraper
 from app.core.scrapers.carwiz_magazine_scraper import CarwizMagazineScraper
+from app.core.scrapers.freesbe_blog_scraper import FreesbeBlogScraper
+
 
 @dataclass
 class ScrapeRuntime:
@@ -163,6 +165,12 @@ class ScraperRegistry:
             fetcher=self._httpx,
             concurrency=concurrency,
     )
+    def _create_freesbe_blog(self, concurrency: int) -> BaseScraper:
+    # httpx is enough right now (page is server-rendered in practice). :contentReference[oaicite:1]{index=1}
+        return FreesbeBlogScraper(
+            fetcher=self._httpx,
+            concurrency=concurrency,
+        )
 
 
     # -----------------------
@@ -189,6 +197,10 @@ class ScraperRegistry:
         
         if key == "carwiz_magazine":
             return self._create_carwiz_magazine(concurrency=concurrency)
+        
+        
+        if key == "freesbe_blog":
+            return self._create_freesbe_blog(concurrency=concurrency)
 
 
         raise ValueError(f"Unknown scraper key: {key}")

@@ -26,9 +26,9 @@ ScraperKey = Literal[
     "icar_news",
     "wheel_test_drives",
     "queenoftheroad_test_drives",
-    "carwiz_magazine",  # ✅ NEW
+    "carwiz_magazine",
+    "freesbe_blog",  # ✅ NEW
 ]
-
 @dataclass(frozen=True)
 class SiteConfig:
     key: ScraperKey
@@ -69,6 +69,10 @@ class Settings:
         SiteConfig(
             key="carwiz_magazine",
             start_url="https://carwiz.co.il/magazine",
+        ),
+        SiteConfig(
+            key="freesbe_blog",
+            start_url="https://freesbe.com/blog",
         ),
     )
 
