@@ -25,7 +25,8 @@ ScraperKey = Literal[
     "gear_car_insurance",
     "icar_news",
     "wheel_test_drives",
-    "queenoftheroad_test_drives",  # ✅ NEW
+    "queenoftheroad_test_drives",
+    "carwiz_magazine",  # ✅ NEW
 ]
 
 @dataclass(frozen=True)
@@ -64,6 +65,10 @@ class Settings:
         SiteConfig(
             key="queenoftheroad_test_drives",
             start_url="https://www.queenoftheroad.co.il/category/%d7%9e%d7%91%d7%97%d7%a0%d7%99-%d7%93%d7%a8%d7%9b%d7%99%d7%9d/",
+        ),
+        SiteConfig(
+            key="carwiz_magazine",
+            start_url="https://carwiz.co.il/magazine",
         ),
     )
 

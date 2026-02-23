@@ -16,7 +16,7 @@ from app.core.scrapers.gear_scraper import GearSecondHandScraper
 from app.core.scrapers.icar_news_scraper import IcarNewsScraper
 from app.core.scrapers.wheel_scraper import WheelTestDrivesScraper
 from app.core.scrapers.queenoftheroad_scraper import QueenOfTheRoadTestDrivesScraper
-
+from app.core.scrapers.carwiz_magazine_scraper import CarwizMagazineScraper
 
 @dataclass
 class ScrapeRuntime:
@@ -156,6 +156,14 @@ class ScraperRegistry:
             fetcher=self._get_queenoftheroad_fetcher(),
             concurrency=concurrency,
         )
+    def _create_carwiz_magazine(self, concurrency: int) -> BaseScraper:
+        # httpx is enough for the pages I checked; if it becomes JS-only later,
+        # you can swap to a HybridFetcher (require_selector="main, h1, p").
+        return CarwizMagazineScraper(
+            fetcher=self._httpx,
+            concurrency=concurrency,
+    )
+
 
     # -----------------------
     # Public API
@@ -178,5 +186,9 @@ class ScraperRegistry:
 
         if key == "queenoftheroad_test_drives":
             return self._create_queenoftheroad_test_drives(concurrency=concurrency)
+        
+        if key == "carwiz_magazine":
+            return self._create_carwiz_magazine(concurrency=concurrency)
+
 
         raise ValueError(f"Unknown scraper key: {key}")
