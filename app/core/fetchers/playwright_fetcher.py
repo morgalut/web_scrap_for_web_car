@@ -44,7 +44,16 @@ class PlaywrightFetcher(BaseFetcher):
             self._browser = await self._pw.chromium.launch(headless=self.headless)
 
             # ✅ You can optionally add locale/timezone/user_agent here if needed.
-            self._ctx = await self._browser.new_context()
+            self._ctx = await self._browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                locale="he-IL",
+                timezone_id="Asia/Jerusalem",
+                viewport={"width": 1366, "height": 768},
+            )
             self._ctx.set_default_navigation_timeout(self.timeout_ms)
             self._ctx.set_default_timeout(self.timeout_ms)
 
@@ -53,10 +62,10 @@ class PlaywrightFetcher(BaseFetcher):
         url: str,
         wait_for_selector: Optional[str] = None,
         click_selectors: Optional[list[str]] = None,
-        wait_state: WaitState = "attached",   # ✅ CHANGED default from 'visible'
-        extra_wait_ms: int = 0,               # ✅ optional small delay after selector appears
-        wait_networkidle: bool = True,        # ✅ helps on JS-rendered pages
-        scroll_steps: int = 4,                # ✅ for lazy-loaded listings
+        wait_state: WaitState = "attached",
+        extra_wait_ms: int = 0,
+        wait_networkidle: bool = True,
+        scroll_steps: int = 4,
         scroll_wait_ms: int = 700,
     ) -> str:
         await self._ensure()
@@ -66,14 +75,12 @@ class PlaywrightFetcher(BaseFetcher):
         try:
             await page.goto(url, wait_until=self.wait_until, timeout=self.timeout_ms)
 
-            # ✅ often helps for JS-heavy pages
             if wait_networkidle:
                 try:
                     await page.wait_for_load_state("networkidle", timeout=min(15_000, self.timeout_ms))
                 except Exception:
                     pass
 
-            # ✅ best-effort clicks (cookie banners, close buttons, etc.)
             if click_selectors:
                 for sel in click_selectors:
                     try:
@@ -83,21 +90,19 @@ class PlaywrightFetcher(BaseFetcher):
                     except Exception:
                         pass
 
-            # ✅ robust selector waiting (with scroll + retry)
             if wait_for_selector:
-                # 1) quick wait
                 try:
+                    # quick wait
                     await page.locator(wait_for_selector).first.wait_for(
                         state=wait_state,
                         timeout=min(12_000, self.timeout_ms),
                     )
                 except Exception:
-                    # 2) scroll + retry (lazy-loading)
+                    # scroll + retry
                     for _ in range(max(0, scroll_steps)):
                         try:
                             await page.evaluate("window.scrollBy(0, Math.max(700, window.innerHeight));")
                             await page.wait_for_timeout(scroll_wait_ms)
-
                             await page.locator(wait_for_selector).first.wait_for(
                                 state=wait_state,
                                 timeout=min(6_000, self.timeout_ms),
@@ -105,18 +110,28 @@ class PlaywrightFetcher(BaseFetcher):
                             break
                         except Exception:
                             continue
-                    else:
-                        # 3) last-chance wait (full timeout)
+                    # last chance (do not raise)
+                    try:
                         await page.locator(wait_for_selector).first.wait_for(
                             state=wait_state,
-                            timeout=self.timeout_ms,
+                            timeout=min(10_000, self.timeout_ms),
                         )
+                    except Exception:
+                        pass
 
             if extra_wait_ms > 0:
                 await page.wait_for_timeout(extra_wait_ms)
 
-            return await page.content()
+            html = await page.content()
+            return html if html is not None else ""
 
+        except Exception:
+            # ✅ Never return None
+            try:
+                html = await page.content()
+                return html if html is not None else ""
+            except Exception:
+                return ""
         finally:
             await page.close()
 

@@ -8,7 +8,7 @@ from app.core.fetchers.base import BaseFetcher
 from app.core.fetchers.httpx_fetcher import HttpxFetcher
 from app.core.fetchers.playwright_fetcher import PlaywrightFetcher
 from app.core.fetchers.hybrid_fetcher import HybridFetcher
-
+from app.core.scrapers.autocenter_articles_scraper import AutoCenterArticlesScraper
 from app.core.scrapers.base import BaseScraper
 from app.core.scrapers.trademobile_scraper import TradeMobileScraper
 from app.core.scrapers.autocoil_scraper import AutoCoIlTestDrivesScraper
@@ -171,7 +171,12 @@ class ScraperRegistry:
             fetcher=self._httpx,
             concurrency=concurrency,
         )
-
+    
+    def _create_autocenter_articles(self, concurrency: int) -> BaseScraper:
+        return AutoCenterArticlesScraper(
+            pw=self._get_pw(),
+            concurrency=concurrency,
+        )
 
     # -----------------------
     # Public API
@@ -198,9 +203,12 @@ class ScraperRegistry:
         if key == "carwiz_magazine":
             return self._create_carwiz_magazine(concurrency=concurrency)
         
-        
+
         if key == "freesbe_blog":
             return self._create_freesbe_blog(concurrency=concurrency)
+        
+        if key == "autocenter_articles":
+            return self._create_autocenter_articles(concurrency=concurrency)
 
 
         raise ValueError(f"Unknown scraper key: {key}")

@@ -27,8 +27,10 @@ ScraperKey = Literal[
     "wheel_test_drives",
     "queenoftheroad_test_drives",
     "carwiz_magazine",
-    "freesbe_blog",  # ✅ NEW
+    "freesbe_blog",
+    "autocenter_articles",  # ✅ NEW
 ]
+
 @dataclass(frozen=True)
 class SiteConfig:
     key: ScraperKey
@@ -74,6 +76,10 @@ class Settings:
             key="freesbe_blog",
             start_url="https://freesbe.com/blog",
         ),
+        SiteConfig(
+            key="autocenter_articles",
+            start_url="https://www.autocenter.co.il/articles",
+    ),
     )
 
     httpx: HttpxConfig = field(default_factory=HttpxConfig)
