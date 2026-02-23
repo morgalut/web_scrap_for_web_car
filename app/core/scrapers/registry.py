@@ -19,7 +19,8 @@ from app.core.scrapers.queenoftheroad_scraper import QueenOfTheRoadTestDrivesScr
 from app.core.scrapers.carwiz_magazine_scraper import CarwizMagazineScraper
 from app.core.scrapers.freesbe_blog_scraper import FreesbeBlogScraper
 from app.core.scrapers.israelhayom_auto_scraper import IsraelHayomAutoScraper
-
+from app.core.scrapers.evm_scraper import EvmNewsScraper
+from app.core.scrapers.otomobil_news_scraper import OtomobilNewsScraper  # ✅ NEW
 
 @dataclass
 class ScrapeRuntime:
@@ -186,6 +187,25 @@ class ScraperRegistry:
             concurrency=concurrency,
     )
 
+    def _create_evm_news(self, concurrency: int) -> BaseScraper:
+        return EvmNewsScraper(
+            http=self._httpx,
+            pw=self._get_pw(),
+            concurrency=concurrency,
+        )
+    def _create_otomobil_news(self, concurrency: int) -> BaseScraper:
+        return OtomobilNewsScraper(
+            http=self._httpx,
+            pw=self._get_pw(),
+            concurrency=concurrency,
+        )
+    
+    def _create_otomobil_test(self, concurrency: int) -> BaseScraper:
+        return OtomobilNewsScraper(
+            http=self._httpx,
+            pw=self._get_pw(),
+            concurrency=concurrency,
+        )
     # -----------------------
     # Public API
     # -----------------------
@@ -220,6 +240,15 @@ class ScraperRegistry:
         
         if key == "israelhayom_auto":
             return self._create_israelhayom_auto(concurrency=concurrency)
+        
+        if key == "evm_news":
+            return self._create_evm_news(concurrency=concurrency)
+        
+        if key == "otomobil_news":
+            return self._create_otomobil_news(concurrency=concurrency)
+        
+        if key == "otomobil_test":
+            return self._create_otomobil_test(concurrency=concurrency)
 
 
         raise ValueError(f"Unknown scraper key: {key}")

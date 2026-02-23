@@ -135,6 +135,8 @@ class PlaywrightFetcher(BaseFetcher):
         finally:
             await page.close()
 
+    
+
     async def aclose(self) -> None:
         if self._ctx is not None:
             await self._ctx.close()

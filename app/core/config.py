@@ -29,7 +29,10 @@ ScraperKey = Literal[
     "carwiz_magazine",
     "freesbe_blog",
     "autocenter_articles",
-    "israelhayom_auto",   # ✅ NEW
+    "israelhayom_auto",
+    "evm_news",
+    "otomobil_news", 
+    "otomobil_test",
 ]
 
 @dataclass(frozen=True)
@@ -85,6 +88,14 @@ class Settings:
             key="israelhayom_auto",
             start_url="https://www.israelhayom.co.il/auto",
         ),
+
+        SiteConfig(key="evm_news", start_url="https://www.evm.co.il/"),
+        
+                # ✅ NEW: Otomobil news category
+        SiteConfig(key="otomobil_news", start_url="https://otomobil.co.il/category/news/"),
+
+        SiteConfig(key="otomobil_test" ,start_url="https://otomobil.co.il/category/test/")
+    
     )
 
     httpx: HttpxConfig = field(default_factory=HttpxConfig)
