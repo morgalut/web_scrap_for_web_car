@@ -14,6 +14,8 @@ from app.core.logging import get_logger
 from app.core.scrapers.registry import ScraperRegistry
 from app.core.storage.csv_storage import CsvStorage
 from app.core.storage.html_storage import HtmlStorage
+from app.core.storage.postgres_storage import PostgresStorage
+
 
 router = APIRouter(tags=["scraping"])
 
@@ -75,13 +77,21 @@ async def scrape(
     delay_s: float = Query(default=0.25, ge=0.0, le=5.0),
     delay_jitter_s: float = Query(default=0.15, ge=0.0, le=5.0),
     close_ads: bool = Query(default=True),
+
+    # ✅ new: choose outputs
+    save_csv: bool = Query(default=False),
+    save_db: bool = Query(default=True),
+
+    # ✅ new: optional DSN override; if empty, PostgresStorage will use DATABASE_URL
+    db_dsn: str = Query(default=""),
 ):
     t_req = time.perf_counter()
 
     log.info("Scrape request received")
     log.info(
         "Parameters -> all_sites=%s, start_url=%s, concurrency=%s, headless=%s, "
-        "player=%s, out_dir=%s, save_html=%s, delay_s=%.2f, delay_jitter_s=%.2f, close_ads=%s",
+        "player=%s, out_dir=%s, save_html=%s, save_csv=%s, save_db=%s, "
+        "delay_s=%.2f, delay_jitter_s=%.2f, close_ads=%s",
         all_sites,
         start_url,
         concurrency,
@@ -89,6 +99,8 @@ async def scrape(
         player,
         out_dir,
         save_html,
+        save_csv,
+        save_db,
         delay_s,
         delay_jitter_s,
         close_ads,
@@ -97,8 +109,9 @@ async def scrape(
     os.makedirs(out_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    storage = CsvStorage()
+    csv_storage = CsvStorage()
     html_storage = HtmlStorage()
+    pg_storage = PostgresStorage()
 
     registry = ScraperRegistry(settings=settings, headless=headless)
     runtime = registry.runtime()
@@ -121,11 +134,7 @@ async def scrape(
 
         start_norm = normalize_url(start_url)
 
-        matched = [
-            s
-            for s in settings.sites
-            if normalize_url(s.start_url) == start_norm
-        ]
+        matched = [s for s in settings.sites if normalize_url(s.start_url) == start_norm]
 
         if not matched:
             configured = [s.start_url for s in settings.sites]
@@ -160,8 +169,10 @@ async def scrape(
             log.info("------------------------------------------------------------")
             log.info("Scraping site: key=%s | start_url=%s", site.key, site.start_url)
 
-            out_csv_path = os.path.join(out_dir, f"{site.key}_{ts}.csv")
+            out_csv_path = os.path.join(out_dir, f"{site.key}_{ts}.csv")  # used only if save_csv=True
             saved_html_dir: Optional[str] = None
+            saved_db: Optional[str] = None
+            saved_csv: Optional[str] = None
 
             try:
                 scraper = registry.create(key=site.key, concurrency=concurrency)
@@ -223,9 +234,16 @@ async def scrape(
                     )
                     log.info("HTML pages saved under: %s", saved_html_dir)
 
-                # Save CSV
-                storage.save(articles, out_csv_path)
-                log.info("CSV saved at: %s", out_csv_path)
+                # ✅ Save to Postgres
+                if save_db:
+                    saved_db = pg_storage.save(articles, db_dsn)  # db_dsn may be "" -> uses DATABASE_URL
+                    log.info("Saved to DB: %s", saved_db)
+
+                # ✅ Optional: also save CSV
+                if save_csv:
+                    csv_storage.save(articles, out_csv_path)
+                    saved_csv = out_csv_path
+                    log.info("CSV saved at: %s", out_csv_path)
 
                 elapsed = round(time.perf_counter() - t0, 3)
 
@@ -235,7 +253,8 @@ async def scrape(
                         "status": "ok",
                         "found_urls": len(urls),
                         "fetched_articles": len(articles),
-                        "saved_csv": out_csv_path,
+                        "saved_db": saved_db,
+                        "saved_csv": saved_csv,
                         "saved_html_dir": saved_html_dir,
                         "duration_s": elapsed,
                     }
