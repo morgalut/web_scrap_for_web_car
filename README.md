@@ -65,7 +65,7 @@ GET /health
 ## Scrape All Sites
 
 ```bash
-curl -X POST "http://localhost:8000/scrape?all_sites=true&save_db=true"
+curl -X POST "http://localhost:8001/scrape?all_sites=true&save_db=true"
 ```
 
 ---

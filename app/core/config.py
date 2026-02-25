@@ -28,7 +28,7 @@ ScraperKey = Literal[
     "queenoftheroad_test_drives",
     "carwiz_magazine",
     "freesbe_blog",
-    "autocenter_articles",
+    # "autocenter_articles",
     "israelhayom_auto",
     "evm_news",
     "otomobil_news", 
@@ -80,10 +80,10 @@ class Settings:
             key="freesbe_blog",
             start_url="https://freesbe.com/blog",
         ),
-        SiteConfig(
-            key="autocenter_articles",
-            start_url="https://www.autocenter.co.il/articles",
-        ),
+        # SiteConfig(
+        #     key="autocenter_articles",
+        #     start_url="https://www.autocenter.co.il/articles",
+        # ),
         SiteConfig(
             key="israelhayom_auto",
             start_url="https://www.israelhayom.co.il/auto",
